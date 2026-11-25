@@ -1,108 +1,125 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>간편 PDF 편집기</title>
-<meta name="description" content="PDF에 글자, 이미지, 서명을 넣는 간단한 편집기. 파일은 서버로 전송되지 않고 브라우저 안에서만 처리됩니다.">
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PDF웍스 웹</title>
+  <meta name="description" content="PDF에 글자, 이미지, 서명을 넣는 간단한 편집기. 파일은 서버로 올라가지 않고 이 브라우저 안에서만 처리됩니다.">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#1d4ed8">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header class="toolbar">
-  <div class="brand">간편 PDF 편집기</div>
-  <div class="tools">
-    <button id="btnOpen" class="tool" title="PDF 열기"><span class="ico">📂</span><span class="lbl">열기</span></button>
-    <button id="btnText" class="tool needs-doc" title="텍스트 상자 넣기" disabled><span class="ico">T</span><span class="lbl">텍스트</span></button>
-    <button id="btnImage" class="tool needs-doc" title="이미지 넣기 (도장, 로고, 사진)" disabled><span class="ico">🖼️</span><span class="lbl">이미지</span></button>
-    <button id="btnSign" class="tool needs-doc" title="서명 넣기" disabled><span class="ico">✍️</span><span class="lbl">서명</span></button>
-    <button id="btnDownload" class="tool primary needs-doc" title="편집한 PDF 다운로드" disabled><span class="ico">⬇️</span><span class="lbl">다운로드</span></button>
-  </div>
-  <input id="filePdf" type="file" accept="application/pdf,.pdf" hidden>
-  <input id="fileImage" type="file" accept="image/*" hidden>
-</header>
+  <header class="topbar">
+    <img class="logo" src="img/icon.svg" alt="" width="40" height="40">
+    <div class="brand">
+      <h1>PDF웍스 웹 <a class="author" href="http://blog.naver.com/hupers" target="_blank" rel="noopener">(@사랑나무아빠)</a>
+        <a class="docs-link" href="https://github.com/hupers77/ProjPDFeditor#readme" target="_blank" rel="noopener">사용법(Documents)</a></h1>
+      <p class="tagline">PDF는 서버로 올라가지 않고 이 브라우저 안에서만 처리됩니다.</p>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="donate-open" class="ghost donate-btn" title="이 프로그램을 후원합니다">♥ 후원하기</button>
+      <button type="button" id="btnDownload" class="primary needs-doc" disabled>PDF 저장</button>
+    </div>
+    <input id="filePdf" type="file" accept="application/pdf,.pdf" hidden>
+    <input id="fileImage" type="file" accept="image/*" hidden>
+  </header>
 
-<main id="workspace">
-  <div id="emptyState" class="empty">
-    <div class="empty-box">
-      <div class="empty-ico">📄</div>
-      <p>편집할 PDF 파일을 여세요.</p>
-      <button id="btnOpenBig" class="big">PDF 파일 열기</button>
-      <p class="hint">PC에서는 파일을 이 창으로 끌어다 놓아도 됩니다.<br>파일은 서버로 올라가지 않고 이 브라우저 안에서만 처리됩니다.</p>
-    </div>
-  </div>
-  <div id="viewer" hidden>
-    <div id="pageWrap">
-      <canvas id="pageCanvas"></canvas>
-      <div id="overlay"></div>
-    </div>
-  </div>
-</main>
+  <main class="layout">
+    <section class="doc-pane">
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="PDF 열기">
+        <p class="dz-title">PDF 파일을 여기에 끌어다 놓으세요</p>
+        <p class="dz-sub">또는 <button type="button" id="btnOpenBig" class="link">PDF 선택</button></p>
+      </div>
 
-<nav id="pager" class="pager" hidden>
-  <button id="btnPrev" title="이전 페이지">◀</button>
-  <span class="pageinfo"><input id="pageNum" type="number" min="1" value="1" inputmode="numeric"> / <span id="pageCount">1</span></span>
-  <button id="btnNext" title="다음 페이지">▶</button>
-  <span class="sep"></span>
-  <button id="btnZoomOut" title="축소">－</button>
-  <button id="btnFit" title="화면 너비에 맞추기">맞춤</button>
-  <button id="btnZoomIn" title="확대">＋</button>
-</nav>
+      <div id="viewerCard" class="preview" hidden>
+        <div class="preview-head">
+          <strong id="docName" class="doc-name">문서</strong>
+          <span class="preview-nav">
+            <button type="button" id="btnPrev" class="ghost small" title="이전 페이지">◀</button>
+            <input id="pageNum" type="number" min="1" value="1" inputmode="numeric" aria-label="페이지"> / <span id="pageCount">1</span>
+            <button type="button" id="btnNext" class="ghost small" title="다음 페이지">▶</button>
+          </span>
+          <span class="preview-nav">
+            <button type="button" id="btnZoomOut" class="ghost small" title="축소">－</button>
+            <button type="button" id="btnFit" class="ghost small" title="너비에 맞추기">맞춤</button>
+            <button type="button" id="btnZoomIn" class="ghost small" title="확대">＋</button>
+            <button type="button" id="btnOpen" class="ghost small" title="다른 PDF 열기">다른 PDF</button>
+          </span>
+        </div>
+        <div id="workspace" class="stage">
+          <div id="viewer">
+            <div id="pageWrap">
+              <canvas id="pageCanvas"></canvas>
+              <div id="overlay"></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">항목은 끌어서 옮기고, 파란 점을 끌어 크기를 바꿉니다. ← → 키로 페이지를 넘기고 Delete 키로 선택한 항목을 지웁니다.</p>
+      </div>
+    </section>
 
-<!-- 선택한 항목 속성 패널 -->
-<aside id="props" hidden>
-  <div class="props-head">
-    <strong id="propsTitle">텍스트</strong>
-    <span class="head-btns">
-      <button id="btnDelete" class="danger-sm" title="선택한 항목 삭제">삭제</button>
-      <button id="btnPropsClose" class="icon-btn" title="선택 해제">✕</button>
-    </span>
-  </div>
-  <div id="propsEmpty" class="props-body">
-    <p class="hint">위쪽 버튼으로 <b>텍스트</b>, <b>이미지</b>, <b>서명</b>을 넣으세요.<br><br>넣은 항목을 누르면 여기에서 내용, 글꼴, 크기, 색상을 바꿀 수 있습니다. 항목은 끌어서 옮기고, 파란 점을 끌어서 크기를 바꿉니다.</p>
-  </div>
-  <div id="propsText" class="props-body">
-    <label class="field">내용
-      <textarea id="txtContent" rows="3"></textarea>
-    </label>
-    <div class="row">
-      <label class="field grow2">글꼴
-        <select id="txtFont"></select>
-      </label>
-      <label class="field">크기
-        <input id="txtSize" type="number" min="4" max="200" step="1">
-      </label>
-      <label class="field">색상
-        <input id="txtColor" type="color">
-      </label>
-    </div>
-    <div class="swatches" data-target="txtColor">
-      <button style="--c:#000000" data-c="#000000" title="검정"></button>
-      <button style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
-      <button style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
-      <button style="--c:#555555" data-c="#555555" title="회색"></button>
-    </div>
-  </div>
-  <div id="propsImage" class="props-body">
-    <label class="check"><input id="imgBgRemove" type="checkbox"> 배경 투명하게</label>
-    <label class="field" id="imgTolWrap">투명 처리 강도
-      <input id="imgTol" type="range" min="5" max="120" value="40">
-    </label>
-    <p class="hint small">흰 종이에 찍은 도장, 서명, 로고의 바탕색을 지웁니다.</p>
-  </div>
-</aside>
+    <aside class="settings-pane">
+      <fieldset>
+        <legend>넣기</legend>
+        <div class="insert-btns">
+          <button type="button" id="btnText" class="ghost needs-doc" disabled><b>T</b> 텍스트</button>
+          <button type="button" id="btnImage" class="ghost needs-doc" disabled>🖼 이미지</button>
+          <button type="button" id="btnSign" class="ghost needs-doc" disabled>✍ 서명</button>
+        </div>
+        <p class="hint explain">이미지는 도장, 로고, 사진을 넣을 때 씁니다. 서명은 직접 그리거나, 이미지로 올리거나, 이름을 필기체로 바꿔 넣습니다.</p>
+      </fieldset>
 
-<!-- 서명 창 -->
-<dialog id="sigDialog">
-  <form method="dialog" class="dlg">
-    <div class="dlg-head">
-      <strong>서명 넣기</strong>
-      <button value="cancel" class="icon-btn" title="닫기">✕</button>
-    </div>
-    <div class="tabs" role="tablist">
-      <button type="button" data-tab="saved">저장됨</button>
-      <button type="button" data-tab="draw">그리기</button>
-      <button type="button" data-tab="upload">이미지</button>
-      <button type="button" data-tab="type">이름 입력</button>
+      <fieldset id="props">
+        <legend class="legend-row"><span id="propsTitle">선택한 항목</span>
+          <span class="head-btns" id="propsBtns" hidden>
+            <button type="button" id="btnDelete" class="ghost small danger">삭제</button>
+            <button type="button" id="btnPropsClose" class="ghost small" title="선택 해제">닫기 ✕</button>
+          </span>
+        </legend>
+        <p id="propsEmpty" class="hint">페이지에 넣은 항목을 누르면 여기에서 내용, 글꼴, 크기, 색상을 바꿀 수 있습니다.</p>
+
+        <div id="propsText">
+          <div class="row col"><span>내용</span><textarea id="txtContent" rows="3"></textarea></div>
+          <div class="row"><span>글꼴</span><select id="txtFont"></select></div>
+          <p class="font-more" id="localFontsRow" hidden><button type="button" id="btnLocalFonts" class="link">이 컴퓨터의 글꼴 더 보기</button></p>
+          <p class="hint" id="fontHint"></p>
+          <div class="row"><span>크기</span><span class="unit"><input id="txtSize" type="number" min="4" max="200" step="1"> pt</span></div>
+          <div class="row"><span>색상</span>
+            <span class="unit">
+              <span class="swatches">
+                <button type="button" style="--c:#000000" data-c="#000000" title="검정"></button>
+                <button type="button" style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
+                <button type="button" style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
+                <button type="button" style="--c:#555555" data-c="#555555" title="회색"></button>
+              </span>
+              <input id="txtColor" type="color">
+            </span>
+          </div>
+        </div>
+
+        <div id="propsImage">
+          <label class="check"><input id="imgBgRemove" type="checkbox"> 배경 투명하게</label>
+          <div class="row" id="imgTolWrap"><span>투명 처리 강도</span><input id="imgTol" type="range" min="5" max="120" value="40"></div>
+          <p class="hint">흰 종이에 찍은 도장, 서명, 로고의 바탕색을 지웁니다.</p>
+        </div>
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" id="btnDownload2" class="primary needs-doc" disabled>PDF 저장</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 서명 창 -->
+  <dialog id="sigDialog" class="donate sig">
+    <form method="dialog" class="donate-close-row"><button class="ghost small" aria-label="닫기">닫기 ✕</button></form>
+    <h2>서명 넣기</h2>
+    <div class="donate-tabs sig-tabs" role="tablist">
+      <button type="button" role="tab" data-tab="saved">저장됨</button>
+      <button type="button" role="tab" data-tab="draw">그리기</button>
+      <button type="button" role="tab" data-tab="upload">이미지</button>
+      <button type="button" role="tab" data-tab="type">이름 입력</button>
     </div>
 
     <section class="tab" data-tab="saved">
@@ -113,35 +130,33 @@
     <section class="tab" data-tab="draw">
       <div class="pad-wrap"><canvas id="sigPad"></canvas><span class="pad-hint">여기에 서명하세요</span></div>
       <div class="row center">
-        <div class="swatches" id="penColors">
+        <span class="swatches" id="penColors">
           <button type="button" style="--c:#000000" data-c="#000000" class="on" title="검정"></button>
           <button type="button" style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
           <button type="button" style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
-        </div>
+        </span>
         <label class="inline">굵기 <input id="penWidth" type="range" min="1" max="10" value="3"></label>
-        <button type="button" id="btnPadClear" class="btn">지우기</button>
+        <button type="button" id="btnPadClear" class="ghost small">지우기</button>
       </div>
     </section>
 
     <section class="tab" data-tab="upload">
-      <button type="button" id="btnSigFile" class="big">서명 이미지 선택</button>
+      <button type="button" id="btnSigFile" class="ghost">서명 이미지 선택</button>
       <input id="sigFile" type="file" accept="image/*" hidden>
       <div class="upload-preview checker"><img id="sigUploadPreview" alt=""></div>
       <label class="check"><input id="sigUpBg" type="checkbox" checked> 배경 투명하게</label>
-      <label class="field">투명 처리 강도 <input id="sigUpTol" type="range" min="5" max="120" value="40"></label>
+      <div class="row"><span>투명 처리 강도</span><input id="sigUpTol" type="range" min="5" max="120" value="40"></div>
     </section>
 
     <section class="tab" data-tab="type">
-      <label class="field">이름
-        <input id="sigName" type="text" placeholder="이름을 입력하세요" autocomplete="name">
-      </label>
+      <div class="row col"><span>이름</span><input id="sigName" type="text" placeholder="이름을 입력하세요" autocomplete="name"></div>
       <div id="sigFontList" class="font-list"></div>
       <div class="row center">
-        <div class="swatches" id="typeColors">
+        <span class="swatches" id="typeColors">
           <button type="button" style="--c:#000000" data-c="#000000" class="on" title="검정"></button>
           <button type="button" style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
           <button type="button" style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
-        </div>
+        </span>
       </div>
     </section>
 
@@ -149,15 +164,42 @@
       <label class="check"><input id="sigSave" type="checkbox" checked> 다음에 쓰도록 저장</label>
       <button type="button" id="btnSigInsert" class="primary">넣기</button>
     </div>
-  </form>
-</dialog>
+  </dialog>
 
-<div id="busy" hidden><div class="spinner"></div><p id="busyMsg">처리 중...</p></div>
-<div id="toast" hidden></div>
+  <!-- 후원 창 (포토웍스 웹과 같은 방식) -->
+  <dialog id="donate" class="donate" aria-labelledby="donate-title">
+    <form method="dialog" class="donate-close-row"><button class="ghost small" aria-label="닫기">닫기 ✕</button></form>
+    <h2 id="donate-title">PDF웍스 웹 후원하기</h2>
+    <p class="hint">이 프로그램이 도움이 되셨다면 커피 한 잔으로 응원해 주세요. 후원 방법을 고르세요.</p>
+    <div class="donate-tabs" role="tablist">
+      <button type="button" role="tab" id="tab-kakao" aria-selected="true" aria-controls="panel-kakao">카카오페이</button>
+      <button type="button" role="tab" id="tab-github" aria-selected="false" aria-controls="panel-github">GitHub Sponsors</button>
+    </div>
 
-<script src="lib/pdf.min.js"></script>
-<script src="lib/pdf-lib.min.js"></script>
-<script src="lib/fontkit.umd.min.js"></script>
-<script src="js/app.js"></script>
+    <section id="panel-kakao" role="tabpanel" aria-labelledby="tab-kakao">
+      <a id="kakao-pay-link" class="primary donate-pay" href="https://qr.kakaopay.com/Ej9H7kdOT9c404930" target="_blank" rel="noopener" hidden>카카오페이로 5,000원 송금하기</a>
+      <img class="donate-qr" src="img/kakaopay-qr.png" alt="카카오페이 송금 QR 코드 (5,000원)" width="508" height="484">
+      <p class="hint" id="kakao-hint">휴대폰 카메라로 위 QR 코드를 찍으면 카카오페이 송금 화면이 열립니다.</p>
+      <div class="donate-share">
+        <input type="text" id="kakao-url" readonly value="https://qr.kakaopay.com/Ej9H7kdOT9c404930" aria-label="카카오페이 송금 주소">
+        <button type="button" id="kakao-copy" class="ghost">주소 복사</button>
+        <button type="button" id="kakao-share" class="ghost" hidden>공유</button>
+      </div>
+      <p class="hint" id="kakao-desktop-hint">카카오페이 송금 링크는 휴대폰에서만 열립니다. 컴퓨터에서는 주소를 복사해 카카오톡 등으로 휴대폰에 보내 열어 주세요.</p>
+    </section>
+
+    <section id="panel-github" role="tabpanel" aria-labelledby="tab-github" hidden>
+      <p class="donate-soon">준비 중</p>
+      <p class="hint">GitHub Sponsors (for international supporters) is coming soon. 해외 후원자를 위한 GitHub Sponsors는 승인 절차가 끝나면 열립니다.</p>
+    </section>
+  </dialog>
+
+  <div id="busy" hidden><div class="spinner"></div><p id="busyMsg">처리 중...</p></div>
+  <div id="toast" hidden></div>
+
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/pdf-lib.min.js"></script>
+  <script src="lib/fontkit.umd.min.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

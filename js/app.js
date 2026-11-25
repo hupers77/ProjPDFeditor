@@ -1,6 +1,7 @@
-/* 간편 PDF 편집기
+/* PDF웍스 웹
  * - 화면 표시: pdf.js
- * - 저장: pdf-lib + fontkit (한글 글꼴을 PDF 안에 넣음)
+ * - 저장: pdf-lib + fontkit
+ *   글꼴은 세 가지 방식: 기본 글꼴(PDF에 넣지 않음), 글꼴 넣기(쓴 글자만), 이 컴퓨터의 글꼴(쓴 글자만)
  * 모든 처리는 브라우저 안에서만 이루어지며 파일은 어디에도 전송되지 않습니다.
  */
 (function () {
@@ -9,19 +10,30 @@
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
   // ---------- 글꼴 ----------
+  // group 'sys'   : PDF에 글꼴을 넣지 않음. PDF를 여는 컴퓨터의 기본 한글 글꼴로 보임 (용량 거의 0)
+  // group 'embed' : 이 사이트의 나눔 글꼴에서 쓴 글자만 넣음 (보통 수십 KB)
+  // group 'local' : 이 컴퓨터에 설치된 글꼴에서 쓴 글자만 넣음 (Chrome, Edge PC)
   const FONTS = [
-    { key: 'gothic', label: '나눔고딕', css: 'NanumGothicPE', file: 'fonts/NanumGothic-Regular.ttf' },
-    { key: 'gothicBold', label: '나눔고딕 굵게', css: 'NanumGothicBoldPE', file: 'fonts/NanumGothic-Bold.ttf' },
-    { key: 'myeongjo', label: '나눔명조', css: 'NanumMyeongjoPE', file: 'fonts/NanumMyeongjo-Regular.ttf' },
-    { key: 'pen', label: '나눔손글씨 펜', css: 'NanumPenPE', file: 'fonts/NanumPenScript-Regular.ttf' },
-    { key: 'brush', label: '나눔손글씨 붓', css: 'NanumBrushPE', file: 'fonts/NanumBrushScript-Regular.ttf' },
+    { key: 'sysGothic', group: 'sys', label: '기본 고딕', stack: '"Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif', pdfName: 'HYGoThic-Medium', flags: 4 },
+    { key: 'sysMyeongjo', group: 'sys', label: '기본 명조', stack: 'Batang, AppleMyungjo, "Noto Serif KR", "Noto Serif CJK KR", serif', pdfName: 'HYSMyeongJo-Medium', flags: 6 },
+    { key: 'nanumGothic', group: 'embed', label: '나눔고딕', stack: '"NanumGothicPE"', file: 'fonts/NanumGothic-Regular.ttf' },
+    { key: 'nanumGothicBold', group: 'embed', label: '나눔고딕 굵게', stack: '"NanumGothicBoldPE"', file: 'fonts/NanumGothic-Bold.ttf' },
+    { key: 'nanumMyeongjo', group: 'embed', label: '나눔명조', stack: '"NanumMyeongjoPE"', file: 'fonts/NanumMyeongjo-Regular.ttf' },
+    { key: 'nanumPen', group: 'embed', label: '나눔손글씨 펜', stack: '"NanumPenPE"', file: 'fonts/NanumPenScript-Regular.ttf' },
+    { key: 'nanumBrush', group: 'embed', label: '나눔손글씨 붓', stack: '"NanumBrushPE"', file: 'fonts/NanumBrushScript-Regular.ttf' },
   ];
+  const FONT_HINTS = {
+    sys: 'PDF에 글꼴을 넣지 않아 용량이 늘지 않습니다. 글자 모양은 PDF를 여는 기기의 기본 한글 글꼴(예: 맑은 고딕)로 보입니다.',
+    embed: '쓴 글자만 PDF에 넣습니다(보통 수십 KB). 어느 기기에서 열어도 이 모양 그대로 보입니다.',
+    local: '이 컴퓨터의 글꼴에서 쓴 글자만 PDF에 넣습니다. 어느 기기에서 열어도 이 모양 그대로 보입니다.',
+  };
   const SIG_FONTS = [
     { key: 'pen', label: '나눔 펜', css: 'NanumPenPE' },
     { key: 'brush', label: '나눔 붓', css: 'NanumBrushPE' },
     { key: 'dancing', label: '영문 필기체', css: 'DancingPE' },
   ];
   const fontByKey = (k) => FONTS.find((f) => f.key === k) || FONTS[0];
+  const hasFont = (k) => FONTS.some((f) => f.key === k);
   const LINE_HEIGHT = 1.2;
 
   // ---------- 상태 ----------
@@ -45,15 +57,16 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   };
-  const textDefaults = Object.assign({ font: 'gothic', size: 14, color: '#000000' }, store.get('pe.textDefaults', {}));
+  const textDefaults = Object.assign({ font: 'sysGothic', size: 14, color: '#000000' }, store.get('pe.textDefaults', {}));
+  if (!hasFont(textDefaults.font) && !/^local:/.test(textDefaults.font)) textDefaults.font = 'sysGothic';
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
   const el = {
     filePdf: $('filePdf'), fileImage: $('fileImage'),
-    empty: $('emptyState'), viewer: $('viewer'), workspace: $('workspace'),
+    dropzone: $('dropzone'), viewerCard: $('viewerCard'), docName: $('docName'), workspace: $('workspace'),
     pageWrap: $('pageWrap'), canvas: $('pageCanvas'), overlay: $('overlay'),
-    pager: $('pager'), pageNum: $('pageNum'), pageCount: $('pageCount'),
+    pageNum: $('pageNum'), pageCount: $('pageCount'),
     props: $('props'), propsTitle: $('propsTitle'), propsText: $('propsText'), propsImage: $('propsImage'),
     txtContent: $('txtContent'), txtFont: $('txtFont'), txtSize: $('txtSize'), txtColor: $('txtColor'),
     imgBgRemove: $('imgBgRemove'), imgTol: $('imgTol'), imgTolWrap: $('imgTolWrap'),
@@ -80,8 +93,9 @@
       const buf = new Uint8Array(await file.arrayBuffer());
       const pdf = await pdfjsLib.getDocument({
         data: buf.slice(),
-        cMapUrl: 'lib/cmaps/', cMapPacked: true,
-        standardFontDataUrl: 'lib/standard_fonts/',
+        // 워커 기준이 아니라 페이지 기준 주소로 넘겨야 파일을 찾음
+        cMapUrl: new URL('lib/cmaps/', location.href).href, cMapPacked: true,
+        standardFontDataUrl: new URL('lib/standard_fonts/', location.href).href,
       }).promise;
       if (state.pdf) state.pdf.destroy();
       state.pdf = pdf;
@@ -92,11 +106,10 @@
       state.objects = [];
       state.fit = true;
       select(null);
-      el.empty.hidden = true;
-      el.viewer.hidden = false;
-      el.pager.hidden = false;
-      el.props.hidden = false;
-      document.body.classList.add('has-doc');
+      el.dropzone.hidden = true;
+      el.viewerCard.hidden = false;
+      el.docName.textContent = state.fileName;
+      el.docName.title = state.fileName;
       el.pageCount.textContent = pdf.numPages;
       el.pageNum.max = pdf.numPages;
       document.querySelectorAll('.needs-doc').forEach((b) => { b.disabled = false; });
@@ -111,7 +124,7 @@
 
   // ---------- 페이지 그리기 ----------
   function fitScale() {
-    const avail = el.workspace.clientWidth - (window.innerWidth <= 760 ? 20 : 32);
+    const avail = el.workspace.clientWidth - (window.innerWidth <= 820 ? 16 : 24);
     return Math.max(0.25, Math.min(2.5, avail / state.baseSize.w));
   }
 
@@ -190,7 +203,7 @@
     if (o.type === 'text') {
       const t = d.firstChild;
       t.textContent = o.text || ' ';
-      t.style.fontFamily = '"' + fontByKey(o.font).css + '"';
+      t.style.fontFamily = fontByKey(o.font).stack;
       t.style.fontSize = o.size * s + 'px';
       t.style.color = o.color;
       d.style.width = d.style.height = '';
@@ -212,11 +225,10 @@
     const o = selected();
     document.body.classList.toggle('props-open', !!o);
     $('propsEmpty').hidden = !!o;
-    el.props.querySelector('.head-btns').hidden = !o;
+    $('propsBtns').hidden = !o;
     if (!o) {
-      el.propsTitle.textContent = '도움말';
+      el.propsTitle.textContent = '선택한 항목';
       el.propsText.hidden = el.propsImage.hidden = true;
-      document.body.style.setProperty('--props-h', '0px');
       return;
     }
     el.propsText.hidden = o.type !== 'text';
@@ -226,6 +238,7 @@
       el.propsTitle.textContent = '텍스트';
       el.txtContent.value = o.text;
       el.txtFont.value = o.font;
+      updateFontHint(o.font);
       el.txtSize.value = round1(o.size);
       el.txtColor.value = o.color;
     } else {
@@ -234,7 +247,6 @@
       el.imgTol.value = o.tol || 40;
       el.imgTolWrap.hidden = !o.bgRemove;
     }
-    document.body.style.setProperty('--props-h', el.props.offsetHeight + 'px');
   }
   const round1 = (n) => Math.round(n * 10) / 10;
 
@@ -255,7 +267,10 @@
     const ws = el.workspace.getBoundingClientRect();
     const pg = el.pageWrap.getBoundingClientRect();
     const cx = (Math.max(ws.left, pg.left) + Math.min(ws.right, pg.right)) / 2 - pg.left;
-    const cy = (Math.max(ws.top, pg.top) + Math.min(ws.bottom, pg.bottom)) / 2 - pg.top;
+    let bottom = ws.bottom;
+    // 휴대폰에서는 아래에 뜬 설정 창이 페이지 일부를 가림
+    if (getComputedStyle(el.props).position === 'fixed') bottom = Math.min(bottom, el.props.getBoundingClientRect().top);
+    const cy = (Math.max(ws.top, pg.top) + Math.min(bottom, pg.bottom)) / 2 - pg.top;
     return { x: cx / state.scale, y: cy / state.scale };
   }
 
@@ -357,14 +372,67 @@
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
   // ---------- 속성 패널 입력 ----------
-  el.txtFont.innerHTML = FONTS.map((f) => '<option value="' + f.key + '">' + f.label + '</option>').join('');
+  function buildFontOptions() {
+    const groups = [
+      ['sys', '기본 글꼴 (PDF 용량 늘지 않음)'],
+      ['embed', '글꼴 넣기 (쓴 글자만, 모양 고정)'],
+      ['local', '이 컴퓨터의 글꼴 (쓴 글자만, 모양 고정)'],
+    ];
+    const cur = el.txtFont.value;
+    el.txtFont.innerHTML = '';
+    groups.forEach(([g, label]) => {
+      const list = FONTS.filter((f) => f.group === g);
+      if (!list.length) return;
+      const og = document.createElement('optgroup');
+      og.label = label;
+      list.forEach((f) => { const op = document.createElement('option'); op.value = f.key; op.textContent = f.label; og.appendChild(op); });
+      el.txtFont.appendChild(og);
+    });
+    if (cur) el.txtFont.value = cur;
+  }
+  function updateFontHint(key) {
+    $('fontHint').textContent = FONT_HINTS[fontByKey(key).group] || '';
+  }
+  buildFontOptions();
+
+  // 이 컴퓨터의 글꼴 (Chrome, Edge PC 에서만 가능. 처음에 권한을 물어봄)
+  const canListLocalFonts = 'queryLocalFonts' in window;
+  $('localFontsRow').hidden = !canListLocalFonts;
+  async function loadLocalFonts(fromClick) {
+    try {
+      const all = await window.queryLocalFonts();
+      const byFamily = new Map();
+      for (const fd of all) {
+        const prev = byFamily.get(fd.family);
+        const regular = /^(regular|normal|book|roman|medium|표준|보통)$/i.test(fd.style);
+        if (!prev || (regular && !prev.regular)) byFamily.set(fd.family, { fd, regular });
+      }
+      const families = [...byFamily.keys()].sort((a, b) => a.localeCompare(b, 'ko'));
+      for (let i = FONTS.length - 1; i >= 0; i--) if (FONTS[i].group === 'local') FONTS.splice(i, 1);
+      families.forEach((fam) => {
+        const { fd } = byFamily.get(fam);
+        FONTS.push({ key: 'local:' + fd.postscriptName, group: 'local', label: fam, stack: '"' + fam.replace(/"/g, '') + '", sans-serif', fontData: fd });
+      });
+      buildFontOptions();
+      $('localFontsRow').hidden = true;
+      const o = selected();
+      if (o && o.type === 'text') el.txtFont.value = o.font;
+      if (fromClick) toast('이 컴퓨터의 글꼴 ' + families.length + '개를 목록에 넣었습니다.');
+    } catch (e) {
+      if (fromClick) toast('글꼴 목록을 볼 수 없습니다. 브라우저에서 글꼴 사용을 허용해 주세요.');
+    }
+  }
+  $('btnLocalFonts').addEventListener('click', () => loadLocalFonts(true));
+  if (canListLocalFonts && navigator.permissions) {
+    navigator.permissions.query({ name: 'local-fonts' }).then((r) => { if (r.state === 'granted') loadLocalFonts(false); }).catch(() => {});
+  }
   el.txtContent.addEventListener('input', () => {
     const o = selected(); if (!o || o.type !== 'text') return;
     o.text = el.txtContent.value; updateObjEl(o);
   });
   el.txtFont.addEventListener('change', () => {
     const o = selected(); if (!o || o.type !== 'text') return;
-    o.font = el.txtFont.value; updateObjEl(o); saveTextDefaults(o);
+    o.font = el.txtFont.value; updateObjEl(o); saveTextDefaults(o); updateFontHint(o.font);
   });
   el.txtSize.addEventListener('input', () => {
     const o = selected(); if (!o || o.type !== 'text') return;
@@ -375,7 +443,7 @@
     const o = selected(); if (!o || o.type !== 'text') return;
     o.color = el.txtColor.value; updateObjEl(o); saveTextDefaults(o);
   });
-  document.querySelectorAll('#props .swatches button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('#propsText .swatches button').forEach((b) => b.addEventListener('click', () => {
     el.txtColor.value = b.dataset.c;
     el.txtColor.dispatchEvent(new Event('input'));
   }));
@@ -514,13 +582,13 @@
 
   function setSigTab(t) {
     sig.tab = t;
-    sig.dlg.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+    sig.dlg.querySelectorAll('.sig-tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
     sig.dlg.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('on', s.dataset.tab === t));
     $('sigFoot').hidden = t === 'saved';
     if (t === 'draw') requestAnimationFrame(setupPad);
     if (t === 'type') renderSigFonts();
   }
-  sig.dlg.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => setSigTab(b.dataset.tab)));
+  sig.dlg.querySelectorAll('.sig-tabs button').forEach((b) => b.addEventListener('click', () => setSigTab(b.dataset.tab)));
 
   // 저장된 서명
   function renderSaved() {
@@ -732,9 +800,10 @@
   const baselineCache = {};
   async function baselineRatio(css) {
     if (baselineCache[css] != null) return baselineCache[css];
-    await document.fonts.load('100px "' + css + '"', '가A');
+    try { await document.fonts.load('100px ' + css, '가A'); } catch (e) { /* 시스템 글꼴 */ }
     const box = document.createElement('div');
-    box.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:100px;line-height:' + LINE_HEIGHT + ';white-space:pre;font-family:"' + css + '"';
+    box.style.cssText = 'position:absolute;left:-9999px;top:0;font-size:100px;line-height:' + LINE_HEIGHT + ';white-space:pre';
+    box.style.fontFamily = css;
     box.innerHTML = '가A<span style="display:inline-block;width:1px;height:0;vertical-align:baseline"></span>';
     document.body.appendChild(box);
     const mark = box.lastChild;
@@ -749,6 +818,109 @@
     return PDFLib.rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
   }
 
+  // ----- 기본 글꼴: PDF에 글꼴 파일을 넣지 않는 한글 글꼴 (Adobe-Korea1, UniKS-UCS2-H) -----
+  // PDF를 여는 프로그램이 그 기기의 한글 글꼴로 대신 그립니다.
+  function sysFontRef(doc, f, cache) {
+    if (cache[f.key]) return cache[f.key];
+    const { PDFString } = PDFLib;
+    const ctx = doc.context;
+    const fd = ctx.register(ctx.obj({
+      Type: 'FontDescriptor', FontName: f.pdfName, Flags: f.flags,
+      FontBBox: [-100, -150, 1100, 900], ItalicAngle: 0, Ascent: 880, Descent: -120, CapHeight: 700, StemV: 80,
+    }));
+    const cid = ctx.register(ctx.obj({
+      Type: 'Font', Subtype: 'CIDFontType0', BaseFont: f.pdfName,
+      CIDSystemInfo: { Registry: PDFString.of('Adobe'), Ordering: PDFString.of('Korea1'), Supplement: 2 },
+      FontDescriptor: fd, DW: 1000, W: asciiWidths(f.stack),
+    }));
+    cache[f.key] = ctx.register(ctx.obj({
+      Type: 'Font', Subtype: 'Type0', BaseFont: f.pdfName + '-UniKS-UCS2-H', Encoding: 'UniKS-UCS2-H', DescendantFonts: [cid],
+    }));
+    return cache[f.key];
+  }
+
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  // 영문/숫자 폭 (Adobe-Korea1 의 비례폭 CID 1~95, 반각 CID 8094~8190 = 문자 0x20~0x7E)
+  function asciiWidths(stack) {
+    measureCtx.font = '1000px ' + stack;
+    const ws = [];
+    for (let c = 0x20; c <= 0x7e; c++) ws.push(Math.round(measureCtx.measureText(String.fromCharCode(c)).width));
+    return [1, ws, 8094, ws];
+  }
+  // 글자마다 화면과 같은 자리에 놓이도록 간격을 맞춰 씀 (여는 기기의 글꼴 폭과 상관없이 위치 고정)
+  function drawSysText(doc, page, fontRef, line, opt) {
+    const L = PDFLib;
+    const name = page.node.newFontDictionary('KoSys', fontRef);
+    measureCtx.font = '100px ' + opt.stack;
+    const chars = [...line].map((c) => (c.codePointAt(0) > 0xffff ? '?' : c));
+    const xs = chars.map((_, i) => measureCtx.measureText(chars.slice(0, i).join('')).width * opt.size / 100);
+    // PDF 안에 적어 둔 글자 폭 (영문은 asciiWidths, 나머지는 전각 1000)
+    measureCtx.font = '1000px ' + opt.stack;
+    const asciiW = {};
+    for (let n = 0x20; n <= 0x7e; n++) asciiW[n] = Math.round(measureCtx.measureText(String.fromCharCode(n)).width) * opt.size / 1000;
+    const advOf = (c) => { const n = c.charCodeAt(0); return asciiW[n] != null ? asciiW[n] : opt.size; };
+    const arr = doc.context.obj([]);
+    chars.forEach((c, i) => {
+      if (i > 0) {
+        const adj = (xs[i - 1] + advOf(chars[i - 1]) - xs[i]) * 1000 / opt.size;
+        if (Math.abs(adj) > 0.01) arr.push(L.PDFNumber.of(Math.round(adj * 100) / 100));
+      }
+      arr.push(L.PDFHexString.of(c.charCodeAt(0).toString(16).padStart(4, '0')));
+    });
+    page.pushOperators(
+      L.pushGraphicsState(),
+      L.beginText(),
+      L.setFillingColor(opt.color),
+      L.setFontAndSize(name, opt.size),
+      L.rotateAndSkewTextDegreesAndTranslate(opt.rot, 0, 0, opt.x, opt.y),
+      L.PDFOperator.of(L.PDFOperatorNames.ShowTextAdjusted, [arr]),
+      L.endText(),
+      L.popGraphicsState(),
+    );
+  }
+
+  // 이 컴퓨터의 글꼴 파일 읽기. 여러 글꼴이 묶인 파일(.ttc)은 하나만 꺼냄
+  async function localFontBytes(f) {
+    const buf = new Uint8Array(await (await f.fontData.blob()).arrayBuffer());
+    const tag = String.fromCharCode(buf[0], buf[1], buf[2], buf[3]);
+    let out = buf;
+    if (tag === 'ttcf') out = extractFromCollection(buf, f.fontData.postscriptName);
+    const t2 = String.fromCharCode(out[0], out[1], out[2], out[3]);
+    // CFF(OTF) 글꼴은 쓴 글자만 넣기가 안 되어 파일 전체가 들어가므로 쓰지 않음
+    if (t2 === 'OTTO') throw new Error('CFF 글꼴은 쓴 글자만 넣을 수 없음');
+    return out;
+  }
+  function extractFromCollection(buf, psName) {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const n = dv.getUint32(8);
+    let first = null;
+    for (let k = 0; k < n; k++) {
+      const off = dv.getUint32(12 + k * 4);
+      const numTables = dv.getUint16(off + 4);
+      const recs = [];
+      for (let t = 0; t < numTables; t++) {
+        const r = off + 12 + t * 16;
+        recs.push({ tag: dv.getUint32(r), sum: dv.getUint32(r + 4), off: dv.getUint32(r + 8), len: dv.getUint32(r + 12) });
+      }
+      let size = 12 + numTables * 16;
+      recs.forEach((r) => { size += (r.len + 3) & ~3; });
+      const out = new Uint8Array(size);
+      const ov = new DataView(out.buffer);
+      out.set(buf.subarray(off, off + 12), 0);
+      let pos = 12 + numTables * 16;
+      recs.forEach((r, t) => {
+        const h = 12 + t * 16;
+        ov.setUint32(h, r.tag); ov.setUint32(h + 4, r.sum); ov.setUint32(h + 8, pos); ov.setUint32(h + 12, r.len);
+        out.set(buf.subarray(r.off, r.off + r.len), pos);
+        pos += (r.len + 3) & ~3;
+      });
+      if (!first) first = out;
+      try { if (fontkit.create(out).postscriptName === psName) return out; } catch (e) { /* 다음 */ }
+    }
+    if (first) return first;
+    throw new Error('글꼴 묶음에서 글꼴을 찾지 못함');
+  }
+
   async function downloadPdf() {
     if (!state.pdf) return;
     select(null);
@@ -760,6 +932,8 @@
       const pages = doc.getPages();
       const embeddedFonts = {};
       const embeddedImages = new Map();
+      const sysFonts = {};
+      const fallbackNames = new Set();
 
       for (const o of state.objects) {
         if (o.type === 'text' && !String(o.text).trim()) continue;
@@ -771,17 +945,31 @@
         const toPdf = (x, y) => vp.convertToPdfPoint(x, y);
 
         if (o.type === 'text') {
-          const f = fontByKey(o.font);
-          if (!embeddedFonts[f.key]) {
-            embeddedFonts[f.key] = await doc.embedFont(await fontBytes(f.file), { subset: false });
+          let f = fontByKey(o.font);
+          let font = null;
+          if (f.group !== 'sys') {
+            try {
+              if (!embeddedFonts[f.key]) {
+                const bytes = f.group === 'local' ? await localFontBytes(f) : await fontBytes(f.file);
+                embeddedFonts[f.key] = await doc.embedFont(bytes, { subset: true });
+              }
+              font = embeddedFonts[f.key];
+            } catch (e) {
+              console.warn(e);
+              fallbackNames.add(f.label);
+              f = FONTS[0];
+            }
           }
-          const font = embeddedFonts[f.key];
-          const bl = await baselineRatio(f.css);
+          const bl = await baselineRatio(f.stack);
           const lines = String(o.text).split('\n');
           lines.forEach((line, i) => {
             if (!line) return;
             const [px, py] = toPdf(o.x, o.y + (i * LINE_HEIGHT + bl) * o.size);
-            page.drawText(line, { x: px, y: py, size: o.size, font, color: hexToRgb(o.color), rotate: degrees(rot) });
+            if (font) {
+              page.drawText(line, { x: px, y: py, size: o.size, font, color: hexToRgb(o.color), rotate: degrees(rot) });
+            } else {
+              drawSysText(doc, page, sysFontRef(doc, f, sysFonts), line, { x: px, y: py, size: o.size, color: hexToRgb(o.color), rot, stack: f.stack });
+            }
           });
         } else {
           let img = embeddedImages.get(o.src);
@@ -804,7 +992,9 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 30000);
-      toast('다운로드했습니다: ' + name);
+      toast(fallbackNames.size
+        ? '다운로드했습니다. "' + [...fallbackNames].join(', ') + '" 글꼴은 PDF에 넣을 수 없어 기본 고딕으로 저장했습니다.'
+        : '다운로드했습니다: ' + name, fallbackNames.size ? 6000 : 2600);
     } catch (e) {
       console.error(e);
       toast('PDF를 만들지 못했습니다. ' + (e && e.message ? e.message : ''), 5000);
@@ -826,13 +1016,15 @@
   // ---------- 이벤트 연결 ----------
   const pickPdf = () => el.filePdf.click();
   $('btnOpen').addEventListener('click', pickPdf);
-  $('btnOpenBig').addEventListener('click', pickPdf);
+  el.dropzone.addEventListener('click', pickPdf);
+  el.dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickPdf(); } });
   el.filePdf.addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; openPdfFile(f); });
   $('btnText').addEventListener('click', addText);
   $('btnImage').addEventListener('click', () => el.fileImage.click());
   el.fileImage.addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; onImageFile(f); });
   $('btnSign').addEventListener('click', openSignDialog);
   $('btnDownload').addEventListener('click', downloadPdf);
+  $('btnDownload2').addEventListener('click', downloadPdf);
 
   $('btnPrev').addEventListener('click', () => goPage(state.page - 1));
   $('btnNext').addEventListener('click', () => goPage(state.page + 1));
@@ -849,7 +1041,7 @@
 
   document.addEventListener('keydown', (e) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName);
-    if (typing || sig.dlg.open || !state.pdf) return;
+    if (typing || sig.dlg.open || $('donate').open || !state.pdf) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && state.selId) { e.preventDefault(); deleteObj(state.selId); }
     else if (e.key === 'Escape') select(null);
     else if (e.key === 'ArrowRight' || e.key === 'PageDown') goPage(state.page + 1);
@@ -857,8 +1049,8 @@
   });
 
   // 파일 끌어다 놓기
-  ['dragenter', 'dragover'].forEach((t) => window.addEventListener(t, (e) => { e.preventDefault(); el.empty.classList.add('drag'); }));
-  ['dragleave', 'drop'].forEach((t) => window.addEventListener(t, (e) => { e.preventDefault(); el.empty.classList.remove('drag'); }));
+  ['dragenter', 'dragover'].forEach((t) => window.addEventListener(t, (e) => { e.preventDefault(); el.dropzone.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => window.addEventListener(t, (e) => { e.preventDefault(); el.dropzone.classList.remove('over'); }));
   window.addEventListener('drop', (e) => {
     const f = e.dataTransfer && e.dataTransfer.files[0];
     if (!f) return;
@@ -868,6 +1060,34 @@
 
   window.addEventListener('beforeunload', (e) => {
     if (state.objects.length) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ---------- 후원하기 (포토웍스 웹과 같은 방식) ----------
+  // 카카오페이 송금 링크는 휴대폰에서만 열리므로 컴퓨터에서는 QR 코드를 보여줌
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); // iPadOS
+  $('kakao-pay-link').hidden = !isMobile;
+  $('kakao-desktop-hint').hidden = isMobile;
+  if (isMobile) $('kakao-hint').textContent = '위 버튼을 누르면 카카오페이 송금 화면이 열립니다. 다른 휴대폰으로는 QR 코드를 찍어도 됩니다.';
+  $('kakao-share').hidden = !navigator.share;
+  function selectDonateTab(which) {
+    ['kakao', 'github'].forEach((k) => {
+      $('tab-' + k).setAttribute('aria-selected', String(k === which));
+      $('panel-' + k).hidden = k !== which;
+    });
+  }
+  $('tab-kakao').addEventListener('click', () => selectDonateTab('kakao'));
+  $('tab-github').addEventListener('click', () => selectDonateTab('github'));
+  $('donate-open').addEventListener('click', () => { selectDonateTab('kakao'); $('donate').showModal(); });
+  $('donate').addEventListener('click', (e) => { if (e.target === $('donate')) $('donate').close(); }); // 바깥 누르면 닫기
+  $('kakao-copy').addEventListener('click', async () => {
+    const url = $('kakao-url').value;
+    try { await navigator.clipboard.writeText(url); } catch (e) { $('kakao-url').select(); document.execCommand('copy'); }
+    $('kakao-copy').textContent = '복사됨';
+    setTimeout(() => { $('kakao-copy').textContent = '주소 복사'; }, 1500);
+  });
+  $('kakao-share').addEventListener('click', () => {
+    navigator.share({ title: 'PDF웍스 웹 후원 (카카오페이)', url: $('kakao-url').value }).catch(() => {});
   });
 
   // 테스트용 (브라우저 콘솔에서 상태 확인)
