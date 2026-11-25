@@ -18,10 +18,12 @@
   --line: #e2dfdc;
   --accent: #2563eb;
   --accent-text: #ffffff;
-  --drop: #eef3fe;
-  --dz-bg: #fff6e5;
-  --dz-line: #f0b34f;
-  --dz-text: #8a5a00;
+  /* 파일 넣는 곳: 포토웍스는 녹색·갈색, PDF웍스는 파란색 + 끌어다 놓는 순간 코랄(산호색) */
+  --drop: #fff1ec;
+  --drop-line: #f2735f;
+  --dz-bg: #eaf2ff;
+  --dz-line: #6b9df0;
+  --dz-text: #1e3a8a;
   --ok: #15803d;
   --err: #b91c1c;
   --sel: #2563eb;
@@ -36,10 +38,11 @@
     --line: #36332f;
     --accent: #5b8cff;
     --accent-text: #0b0b0b;
-    --drop: #1f2a40;
-    --dz-bg: #2b2316;
-    --dz-line: #a87a2e;
-    --dz-text: #f2c879;
+    --drop: #3a2420;
+    --drop-line: #e0705f;
+    --dz-bg: #15233b;
+    --dz-line: #3f6fc4;
+    --dz-text: #9cc0ff;
     --ok: #4ade80;
     --err: #f87171;
     --sel: #5b8cff;
@@ -98,7 +101,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: background .15s, border-color .15s;
   cursor: pointer;
 }
-.dropzone.over { background: var(--drop); border-color: var(--accent); }
+.dropzone.over { background: var(--drop); border-color: var(--drop-line); }
+.dropzone.over .dz-title { color: var(--drop-line); }
 .dz-title { margin: 0 0 4px; font-weight: 700; color: var(--dz-text); }
 .dz-sub { margin: 0; color: var(--muted); }
 .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
