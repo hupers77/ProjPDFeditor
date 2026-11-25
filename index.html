@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>간편 PDF 편집기</title>
+<meta name="description" content="PDF에 글자, 이미지, 서명을 넣는 간단한 편집기. 파일은 서버로 전송되지 않고 브라우저 안에서만 처리됩니다.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="toolbar">
+  <div class="brand">간편 PDF 편집기</div>
+  <div class="tools">
+    <button id="btnOpen" class="tool" title="PDF 열기"><span class="ico">📂</span><span class="lbl">열기</span></button>
+    <button id="btnText" class="tool needs-doc" title="텍스트 상자 넣기" disabled><span class="ico">T</span><span class="lbl">텍스트</span></button>
+    <button id="btnImage" class="tool needs-doc" title="이미지 넣기 (도장, 로고, 사진)" disabled><span class="ico">🖼️</span><span class="lbl">이미지</span></button>
+    <button id="btnSign" class="tool needs-doc" title="서명 넣기" disabled><span class="ico">✍️</span><span class="lbl">서명</span></button>
+    <button id="btnDownload" class="tool primary needs-doc" title="편집한 PDF 다운로드" disabled><span class="ico">⬇️</span><span class="lbl">다운로드</span></button>
+  </div>
+  <input id="filePdf" type="file" accept="application/pdf,.pdf" hidden>
+  <input id="fileImage" type="file" accept="image/*" hidden>
+</header>
+
+<main id="workspace">
+  <div id="emptyState" class="empty">
+    <div class="empty-box">
+      <div class="empty-ico">📄</div>
+      <p>편집할 PDF 파일을 여세요.</p>
+      <button id="btnOpenBig" class="big">PDF 파일 열기</button>
+      <p class="hint">PC에서는 파일을 이 창으로 끌어다 놓아도 됩니다.<br>파일은 서버로 올라가지 않고 이 브라우저 안에서만 처리됩니다.</p>
+    </div>
+  </div>
+  <div id="viewer" hidden>
+    <div id="pageWrap">
+      <canvas id="pageCanvas"></canvas>
+      <div id="overlay"></div>
+    </div>
+  </div>
+</main>
+
+<nav id="pager" class="pager" hidden>
+  <button id="btnPrev" title="이전 페이지">◀</button>
+  <span class="pageinfo"><input id="pageNum" type="number" min="1" value="1" inputmode="numeric"> / <span id="pageCount">1</span></span>
+  <button id="btnNext" title="다음 페이지">▶</button>
+  <span class="sep"></span>
+  <button id="btnZoomOut" title="축소">－</button>
+  <button id="btnFit" title="화면 너비에 맞추기">맞춤</button>
+  <button id="btnZoomIn" title="확대">＋</button>
+</nav>
+
+<!-- 선택한 항목 속성 패널 -->
+<aside id="props" hidden>
+  <div class="props-head">
+    <strong id="propsTitle">텍스트</strong>
+    <span class="head-btns">
+      <button id="btnDelete" class="danger-sm" title="선택한 항목 삭제">삭제</button>
+      <button id="btnPropsClose" class="icon-btn" title="선택 해제">✕</button>
+    </span>
+  </div>
+  <div id="propsEmpty" class="props-body">
+    <p class="hint">위쪽 버튼으로 <b>텍스트</b>, <b>이미지</b>, <b>서명</b>을 넣으세요.<br><br>넣은 항목을 누르면 여기에서 내용, 글꼴, 크기, 색상을 바꿀 수 있습니다. 항목은 끌어서 옮기고, 파란 점을 끌어서 크기를 바꿉니다.</p>
+  </div>
+  <div id="propsText" class="props-body">
+    <label class="field">내용
+      <textarea id="txtContent" rows="3"></textarea>
+    </label>
+    <div class="row">
+      <label class="field grow2">글꼴
+        <select id="txtFont"></select>
+      </label>
+      <label class="field">크기
+        <input id="txtSize" type="number" min="4" max="200" step="1">
+      </label>
+      <label class="field">색상
+        <input id="txtColor" type="color">
+      </label>
+    </div>
+    <div class="swatches" data-target="txtColor">
+      <button style="--c:#000000" data-c="#000000" title="검정"></button>
+      <button style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
+      <button style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
+      <button style="--c:#555555" data-c="#555555" title="회색"></button>
+    </div>
+  </div>
+  <div id="propsImage" class="props-body">
+    <label class="check"><input id="imgBgRemove" type="checkbox"> 배경 투명하게</label>
+    <label class="field" id="imgTolWrap">투명 처리 강도
+      <input id="imgTol" type="range" min="5" max="120" value="40">
+    </label>
+    <p class="hint small">흰 종이에 찍은 도장, 서명, 로고의 바탕색을 지웁니다.</p>
+  </div>
+</aside>
+
+<!-- 서명 창 -->
+<dialog id="sigDialog">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head">
+      <strong>서명 넣기</strong>
+      <button value="cancel" class="icon-btn" title="닫기">✕</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" data-tab="saved">저장됨</button>
+      <button type="button" data-tab="draw">그리기</button>
+      <button type="button" data-tab="upload">이미지</button>
+      <button type="button" data-tab="type">이름 입력</button>
+    </div>
+
+    <section class="tab" data-tab="saved">
+      <div id="savedList" class="saved-list"></div>
+      <p id="savedEmpty" class="hint">저장된 서명이 없습니다. 다른 탭에서 서명을 만들어 보세요.</p>
+    </section>
+
+    <section class="tab" data-tab="draw">
+      <div class="pad-wrap"><canvas id="sigPad"></canvas><span class="pad-hint">여기에 서명하세요</span></div>
+      <div class="row center">
+        <div class="swatches" id="penColors">
+          <button type="button" style="--c:#000000" data-c="#000000" class="on" title="검정"></button>
+          <button type="button" style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
+          <button type="button" style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
+        </div>
+        <label class="inline">굵기 <input id="penWidth" type="range" min="1" max="10" value="3"></label>
+        <button type="button" id="btnPadClear" class="btn">지우기</button>
+      </div>
+    </section>
+
+    <section class="tab" data-tab="upload">
+      <button type="button" id="btnSigFile" class="big">서명 이미지 선택</button>
+      <input id="sigFile" type="file" accept="image/*" hidden>
+      <div class="upload-preview checker"><img id="sigUploadPreview" alt=""></div>
+      <label class="check"><input id="sigUpBg" type="checkbox" checked> 배경 투명하게</label>
+      <label class="field">투명 처리 강도 <input id="sigUpTol" type="range" min="5" max="120" value="40"></label>
+    </section>
+
+    <section class="tab" data-tab="type">
+      <label class="field">이름
+        <input id="sigName" type="text" placeholder="이름을 입력하세요" autocomplete="name">
+      </label>
+      <div id="sigFontList" class="font-list"></div>
+      <div class="row center">
+        <div class="swatches" id="typeColors">
+          <button type="button" style="--c:#000000" data-c="#000000" class="on" title="검정"></button>
+          <button type="button" style="--c:#1d3fbb" data-c="#1d3fbb" title="파랑"></button>
+          <button type="button" style="--c:#d0021b" data-c="#d0021b" title="빨강"></button>
+        </div>
+      </div>
+    </section>
+
+    <div class="dlg-foot" id="sigFoot">
+      <label class="check"><input id="sigSave" type="checkbox" checked> 다음에 쓰도록 저장</label>
+      <button type="button" id="btnSigInsert" class="primary">넣기</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="busy" hidden><div class="spinner"></div><p id="busyMsg">처리 중...</p></div>
+<div id="toast" hidden></div>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script src="lib/fontkit.umd.min.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
